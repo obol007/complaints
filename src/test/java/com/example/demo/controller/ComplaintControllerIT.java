@@ -59,29 +59,37 @@ class ComplaintControllerIT {
                         .body("counter", equalTo(1))
                         .extract().path("id");
 
-        Optional<Complaint> saved = repository.findById((long) returnedId);
-        assertTrue(saved.isPresent(), "Complaint should be saved in H2");
-        Complaint c = saved.get();
-        assertEquals("Product_123", c.getProductId());
-        assertEquals("Broken screen", c.getContent());
-        assertEquals("alice@example.com", c.getReporter());
-        assertEquals(1, c.getCounter());
-        assertNotNull(c.getCreatedAt());
-        assertNotNull(c.getCountry());
+        Optional<Complaint> savedComplaint = repository.findById((long) returnedId);
+        assertTrue(savedComplaint.isPresent(), "Complaint should be saved in H2");
+        Complaint complaint = savedComplaint.get();
+        assertEquals("Product_123", complaint.getProductId());
+        assertEquals("Broken screen", complaint.getContent());
+        assertEquals("alice@example.com", complaint.getReporter());
+        assertEquals(1, complaint.getCounter());
+        assertNotNull(complaint.getCreatedAt());
+        assertNotNull(complaint.getCountry());
     }
 
     @Test
-    void whenCreateDuplicateComplaint_thenCounterIncrements_andDbUpdated() {
-        ComplaintRequest complaintRequest = new ComplaintRequest(
-                "Product_456",
-                "Battery issue",
-                "bob@example.com"
+    void whenCreateDuplicateComplaint_thenCounterIncrements_thenContentTheSame_andDbUpdated() {
+        String productId = "Product_456";
+        String reporter = "bob@example.com";
+        String originalContent = "Original issue";
+        ComplaintRequest complaintRequest1 = new ComplaintRequest(
+                productId,
+                originalContent,
+                reporter
+        );
+        ComplaintRequest complaintRequest2 = new ComplaintRequest(
+                productId,
+                "New issue",
+                reporter
         );
 
         int id1 =
                 given()
                         .contentType(ContentType.JSON)
-                        .body(complaintRequest)
+                        .body(complaintRequest1)
                         .when()
                         .post()
                         .then()
@@ -92,7 +100,7 @@ class ComplaintControllerIT {
         int id2 =
                 given()
                         .contentType(ContentType.JSON)
-                        .body(complaintRequest)
+                        .body(complaintRequest2)
                         .when()
                         .post()
                         .then()
@@ -100,14 +108,15 @@ class ComplaintControllerIT {
                         .body("counter", equalTo(2))
                         .extract().path("id");
 
-        assertEquals(id1, id2, "Duplicate should return same ID");
-
-        Complaint c = repository.findById((long) id1).orElseThrow();
-        assertEquals(2, c.getCounter(), "Database counter should be 2");
+        assertEquals(id1, id2, "Duplicate should return the same Id");
+        Complaint complaint = repository.findById((long) id1).orElseThrow();
+        assertEquals(2, complaint.getCounter(), "Database counter should be 2");
+        assertEquals("Original issue", complaint.getContent(), "Content should not be changed");
     }
 
     @Test
     void whenUpdateContent_thenContentChanges_inDb() {
+        String updatedContent = "New issue";
         ComplaintRequest complaintRequest = new ComplaintRequest(
                 "Product_789",
                 "Old content",
@@ -124,7 +133,7 @@ class ComplaintControllerIT {
                         .statusCode(200)
                         .extract().path("id");
 
-        ContentUpdateRequest contentUpdateRequest = new ContentUpdateRequest("New better content");
+        ContentUpdateRequest contentUpdateRequest = new ContentUpdateRequest(updatedContent);
 
         given()
                 .contentType(ContentType.JSON)
@@ -133,10 +142,10 @@ class ComplaintControllerIT {
                 .put("/{id}", id)
                 .then()
                 .statusCode(200)
-                .body("content", equalTo("New better content"));
+                .body("content", equalTo(updatedContent));
 
-        Complaint c = repository.findById((long) id).orElseThrow();
-        assertEquals("New better content", c.getContent());
+        Complaint complaint = repository.findById((long) id).orElseThrow();
+        assertEquals(updatedContent, complaint.getContent());
     }
 
     @Test
@@ -165,10 +174,10 @@ class ComplaintControllerIT {
                 .body("productId", hasItem("Product_000"));
 
         assertEquals(1, repository.count(), "One record in DB");
-        Complaint c = repository
+        Complaint complaint = repository
                 .findByProductIdAndReporter("Product_000", "dave@example.com")
                 .orElseThrow();
-        assertEquals("Test get all", c.getContent());
+        assertEquals("Test get all", complaint.getContent());
     }
 
     @Test
@@ -196,7 +205,7 @@ class ComplaintControllerIT {
                 .body("id", equalTo(id))
                 .body("productId", equalTo("Product_111"));
 
-        assertEquals(1, repository.count(), "DB still has one record");
+        assertEquals(1, repository.count(), "DB has one record");
     }
 
     @Test
